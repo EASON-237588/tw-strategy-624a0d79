@@ -162,7 +162,7 @@ const STOCKS = [["1101","台泥","L"],["1102","亞泥","L"],["1103","嘉泥","L"
 // 台股策略分析 — 設定、資料抓取與策略計算
 // 策略逐行照 策略.py（複製自 台股趨勢儀表板\回測\bt.py）移植；改這裡要同步改 策略.py 並跑 驗證.js 對帳。
 
-const BUILD_NO = '018';
+const BUILD_NO = '019';
 const BUILD_NAME = '初探';
 
 const CFG = {
@@ -560,7 +560,7 @@ if (typeof module !== 'undefined') module.exports = { CFG, STRATS, calcRF, calcD
   <ul class="pts">${G.pts.map(p => `<li class="${p[0] > 0 ? 'up' : 'dn'}">${esc(p[1])}</li>`).join('') || '<li class="mut">沒有特別突出或明顯弱點的項目</li>'}</ul>
   <div class="note">EPS：${seq(F.S.eps, 2)}　｜　毛利率：${seq(F.M.gm)}%　｜　ROE：${seq(F.M.roe)}%${G.bank ? '<br>銀行業的毛利率、自由現金流、負債比算法不適用，只看 ROE 與營收。' : ''}</div>
   <div class="note">體質評分：ROE、營收成長、營益率、負債比、自由現金流各項加減分，5 分以上「強」、1～4「中」、0 以下「弱」。
-    <a href="https://eason-237588.github.io/tw-stock-analysis/#${id}" target="_blank" rel="noopener" style="color:var(--blue)">看完整財報分析 ›</a></div>`;
+    <a href="https://eason-237588.github.io/tw-stock-analysis-f3f9488f/#${id}" target="_blank" rel="noopener" style="color:var(--blue)">看完整財報分析 ›</a></div>`;
   }
 
   /* ── K 棒圖：K 棒與背景依主策略上色（紅＝持有、綠＝空手），照台股趨勢儀表板不畫濾網線與進出點 ── */
