@@ -81,7 +81,21 @@ ul.pts{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.7}
 #pg-all:not([hidden]){display:flex;flex-direction:column;height:calc(100dvh - var(--toph,50px) - 24px);min-height:420px}
 #pg-all .bar{flex:none;margin-bottom:6px}
 #allNote{font-size:11px;line-height:1.4}
-#allOut{flex:1;min-height:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:6px}
+/* 2026-11-06 改每頁 6 格（橫 2 直 3），左右滑動翻頁，下方圓點＋頁碼 */
+#allOut{flex:1;min-height:0;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain}
+#allOut::-webkit-scrollbar{display:none}
+.pgx{flex:0 0 100%;min-width:0;scroll-snap-align:start;scroll-snap-stop:always;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(4,minmax(0,1fr));gap:6px}
+.pgx .tile{padding:6px 9px;gap:2px;justify-content:center}
+.pgx .tile .nm{font-size:15px}
+.pgx .tile .badge{font-size:12px;padding:1px 5px}
+.pgx .tile .ln{font-size:12.5px;line-height:1.4;white-space:normal;overflow:visible}
+.fut{flex:none;font-size:10.5px;color:var(--blue);border:1px solid var(--blue);border-radius:5px;padding:0 4px;line-height:16px}
+.pgx .tile .t1{flex-wrap:wrap;row-gap:2px}
+.pgx .tile .nm{white-space:normal;overflow:visible}
+.pgno{flex:none;display:flex;justify-content:center;align-items:center;gap:7px;padding:6px 0 0}
+.pgno i{width:8px;height:8px;border-radius:50%;background:var(--line);cursor:pointer}
+.pgno i.on{background:var(--blue)}
+.pgno b{font-size:11px;color:var(--sub);font-weight:400;margin-left:4px;font-family:Consolas,monospace}
 .tile{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:4px 8px;display:flex;flex-direction:column;justify-content:center;gap:1px;overflow:hidden;cursor:pointer;min-width:0}
 .tile.on{border-color:rgba(255,91,91,.7)}
 .tile .t1{display:flex;align-items:center;gap:5px;min-width:0}
@@ -159,6 +173,7 @@ ul.pts{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.7}
       <button id="allRun" class="btn">更新總表</button>
     </div>
     <div id="allOut"></div>
+    <div id="allPg" class="pgno"></div>
   </section>
 </main>
 
@@ -176,7 +191,7 @@ const STOCKS = [["1101","台泥","L"],["1102","亞泥","L"],["1103","嘉泥","L"
 // 台股策略分析 — 設定、資料抓取與策略計算
 // 策略逐行照 策略.py（複製自 台股趨勢儀表板\回測\bt.py）移植；改這裡要同步改 策略.py 並跑 驗證.js 對帳。
 
-const BUILD_NO = '020';
+const BUILD_NO = '021';
 const BUILD_NAME = '初探';
 
 const CFG = {
@@ -626,23 +641,48 @@ if (typeof module !== 'undefined') module.exports = { CFG, STRATS, calcRF, calcD
 
   /* ── 畫面：總表 ── */
   async function runAll() {
-    const btn = $('#allRun'); btn.disabled = true; const out = $('#allOut'); out.innerHTML = '';
-    for (const id of WATCH) {
-      // 分格（使用者 2026-10-26 要求「重新分格、不翻頁」）：兩欄小格，格高平分畫面剩下的高度
-      const info = NAME[id] || [id, id], el = document.createElement('div'); el.className = 'tile'; el.innerHTML = `<div class="t1"><span class="nm">${esc(info[1])}</span></div><div class="ln mut">讀取中…</div>`; out.appendChild(el);
+    const btn = $('#allRun'); btn.disabled = true; const out = $('#allOut'); out.innerHTML = ''; out.scrollLeft = 0;
+    // 分頁（使用者 2026-11-06 改定「一頁 橫向×2 直向×4」，取代 10/26 的不翻頁）：每頁 8 格，左右滑動翻頁；
+    // 同日要求台指期、那斯達克、黃金、歐元、原油也放進總表，排在最前面（多空反手，點格子跳期貨分頁）
+    const PER = 8, ITEMS = CFG.FUT.map(f => [f[0], f[1], true]).concat(WATCH.map(id => [id, (NAME[id] || [id, id])[1], false]));
+    let page = null; const NPG = Math.ceil(ITEMS.length / PER) || 1;
+    for (const [wi, [id, nm, fut]] of ITEMS.entries()) {
+      if (wi % PER === 0) { page = document.createElement('div'); page.className = 'pgx'; out.appendChild(page); }
+      const info = [id, nm], el = document.createElement('div'); el.className = 'tile'; el.innerHTML = `<div class="t1"><span class="nm">${esc(nm)}</span></div><div class="ln mut">讀取中…</div>`; page.appendChild(el);
+      allPgNo(NPG);
+      if (fut) {
+        try {
+          const F = await analyzeFut(id), s = F.s, a = F.all, last = F.B[F.B.length - 1];
+          FUTD[id] = F; el.classList.add(s.now > 0 ? 'on' : 'off');
+          el.innerHTML = `<div class="t1">${badge(s.now)}<span class="nm">${esc(nm)}</span><span class="fut">期貨</span></div>
+            <div class="ln mut">${pxFmt(last.c)}・${md(s.since)} 起 <span class="${cls(s.chg * s.now)}">${pct(s.chg * s.now, 1)}</span></div>
+            <div class="ln">策略 <span class="${cls(a.ret)}">${pct(a.ret)}</span>　回落 ${pctU(a.mdd)}</div>
+            <div class="ln mut">抱著 <span class="${cls(a.bh)}">${pct(a.bh)}</span>　回落 ${pctU(a.bhMdd)}</div>
+            ${F.h1.ret > 0 && F.h2.ret > 0 ? '<div class="ln"><b class="two">兩段賺</b></div>' : ''}`;
+          el.onclick = () => switchPg('fut');
+        } catch (e) { el.innerHTML = `<div class="t1"><span class="nm">${esc(nm)}</span></div><div class="ln err">${esc(e.message)}</div>`; }
+        continue;
+      }
       try {
         const { R } = await analyzeTrend(id), m = R.rfl, a = m.all;
         el.classList.add(m.now > 0 ? 'on' : 'off');
         el.innerHTML = `<div class="t1">${badge(m.now)}<span class="nm">${esc(info[1])}</span>${CFG.OBSERVE[id] ? '<span class="obs">觀察用</span>' : ''}</div>
           <div class="ln mut">${id.length <= 6 ? id + '・' : ''}${md(m.since)} 起${m.now ? ' ' + pct(m.chg, 1) : ''}</div>
-          <div class="ln">策略 <span class="${cls(a.ret)}">${pct(a.ret)}</span>／抱 <span class="${cls(a.bh)}">${pct(a.bh)}</span></div>
-          <div class="ln mut">回落 ${pctU(a.mdd)}／${pctU(a.bhMdd)}${m.h1.ret > 0 && m.h2.ret > 0 ? ' <b class="two">兩段賺</b>' : ''}</div>`;
+          <div class="ln">策略 <span class="${cls(a.ret)}">${pct(a.ret)}</span>　回落 ${pctU(a.mdd)}</div>
+          <div class="ln mut">抱著 <span class="${cls(a.bh)}">${pct(a.bh)}</span>　回落 ${pctU(a.bhMdd)}</div>
+          ${m.h1.ret > 0 && m.h2.ret > 0 ? '<div class="ln"><b class="two">兩段賺</b></div>' : ''}`;
         el.onclick = () => { switchPg('one'); show(id); };
       } catch (e) { el.innerHTML = `<div class="t1"><span class="nm">${esc(info[1])}</span></div><div class="ln err">${esc(e.message)}</div>`; }
     }
-    $('#allNote').textContent = `自選 ${WATCH.length} 檔・主策略 RF 只做多・紅框＝做多・點格子看細節`;
-    btn.disabled = false;
+    $('#allNote').textContent = `期貨 ${CFG.FUT.length} 個（多空反手）＋自選 ${WATCH.length} 檔（RF 只做多）・紅框＝做多・左右滑動翻頁`;
+    allPgNo(NPG); btn.disabled = false;
   }
+  function allPgNo(n) {
+    const out = $('#allOut'), w = out.clientWidth || 1, i = Math.min(n, Math.round(out.scrollLeft / w) + 1);
+    $('#allPg').innerHTML = Array.from({ length: n }, (_, k) => `<i class="${k + 1 === i ? 'on' : ''}" data-k="${k}"></i>`).join('') + `<b>${i}／${n}</b>`;
+  }
+  $('#allOut').addEventListener('scroll', () => allPgNo($('#allOut').children.length), { passive: true });
+  $('#allPg').onclick = e => { const d = e.target.closest('[data-k]'); if (d) $('#allOut').scrollTo({ left: +d.dataset.k * $('#allOut').clientWidth, behavior: 'smooth' }); };
   $('#allRun').onclick = runAll;
 
   /* ── 畫面：期貨（2026-11-06 使用者要求「一頁 橫向×2 直向×3」）：台指期、那斯達克、黃金、歐元、原油＋說明格 ──
