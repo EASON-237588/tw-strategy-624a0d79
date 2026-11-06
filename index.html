@@ -15,7 +15,7 @@ body{padding-bottom:env(safe-area-inset-bottom)}
 .brand{font-weight:700;font-size:17px;white-space:nowrap}
 .bv{font-family:Consolas,monospace;font-size:13px;color:var(--yellow);font-weight:700}
 .tabs{display:flex;gap:4px}
-.tabs button{background:var(--panel2);color:var(--sub);border:1px solid var(--line);border-radius:8px;padding:5px 12px;font-size:14px}
+.tabs button{white-space:nowrap;background:var(--panel2);color:var(--sub);border:1px solid var(--line);border-radius:8px;padding:5px 12px;font-size:14px}
 .tabs button.on{background:var(--blue);color:#001b33;border-color:var(--blue);font-weight:700}
 .ver{margin-left:auto;font-size:11px;color:var(--sub);white-space:nowrap}
 main{max-width:760px;margin:0 auto;padding:12px}
@@ -90,6 +90,15 @@ ul.pts{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.7}
 .tile .ln{font-size:11.5px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tile .ln.err{padding:0}
 .tile .two{font-weight:400;color:var(--yellow)}
+/* 期貨分頁（2026-11-06）：一頁橫 2 直 3，格高平分畫面剩下的高度；每格上面文字、下面小 K 線圖 */
+#pg-fut:not([hidden]){display:block;height:calc(100dvh - var(--toph,50px) - 24px);min-height:480px}
+#futOut{height:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));gap:6px}
+.tile.ft{justify-content:flex-start;cursor:default;padding:5px 6px 3px}
+.tile.ft canvas{flex:1;min-height:0;height:auto;margin-top:2px}
+.tile.ft .fpx{margin-left:auto;font-family:Consolas,monospace;font-size:12px;color:var(--tx);flex:none}
+.tile.ft .ln{font-size:11px}
+.tile.fnote{justify-content:center}
+.tile.fnote .ln{font-size:11px;line-height:1.45}
 /* 觀察用（2026-10-26）：主策略保護不了的檔，總表名稱旁小標籤、個股頁標題下一行提醒 */
 .obs{flex:none;font-size:10.5px;color:var(--yellow);border:1px solid var(--yellow);border-radius:5px;padding:0 4px;line-height:16px}
 .obsw{margin:8px 0 4px;padding:8px 10px;border:1px solid var(--yellow);border-radius:8px;background:rgba(255,214,0,.08);font-size:13px;line-height:1.6}
@@ -98,7 +107,8 @@ ul.pts{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.7}
 .err{color:#ff8a80;padding:12px}
 .foot{max-width:760px;margin:0 auto;padding:10px 12px 24px;font-size:11px;color:var(--sub);line-height:1.7}
 @media (max-width:420px){
-  .brand{font-size:15px}.tabs button{padding:5px 9px;font-size:13px}
+  .top{gap:6px;padding:10px 8px}
+  .brand{font-size:14px}.tabs{gap:3px}.tabs button{padding:5px 6px;font-size:12.5px}
   .grid{grid-template-columns:repeat(2,1fr)}
   .head .nm{font-size:19px}.head .px{font-size:17px}
   table{font-size:12px}
@@ -122,7 +132,7 @@ ul.pts{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.7}
 <body>
 <header class="top">
   <div class="brand">台股策略分析 <span class="bv" id="bv"></span></div>
-  <nav class="tabs"><button data-pg="all" class="on">總表</button><button data-pg="one">個股</button><button data-pg="chance" id="tabChance">有機會做多<span class="cnt" id="chCnt" hidden></span></button></nav>
+  <nav class="tabs"><button data-pg="all" class="on">總表</button><button data-pg="one">個股</button><button data-pg="chance" id="tabChance">有機會做多<span class="cnt" id="chCnt" hidden></span></button><button data-pg="fut">期貨</button></nav>
 </header>
 
 <main>
@@ -137,6 +147,10 @@ ul.pts{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.7}
 
   <section id="pg-chance" class="pg" hidden>
     <div id="chOut"><div class="loading">讀取每日掃描結果…</div></div>
+  </section>
+
+  <section id="pg-fut" class="pg" hidden>
+    <div id="futOut"></div>
   </section>
 
   <section id="pg-all" class="pg">
@@ -162,7 +176,7 @@ const STOCKS = [["1101","台泥","L"],["1102","亞泥","L"],["1103","嘉泥","L"
 // 台股策略分析 — 設定、資料抓取與策略計算
 // 策略逐行照 策略.py（複製自 台股趨勢儀表板\回測\bt.py）移植；改這裡要同步改 策略.py 並跑 驗證.js 對帳。
 
-const BUILD_NO = '019';
+const BUILD_NO = '020';
 const BUILD_NAME = '初探';
 
 const CFG = {
@@ -173,25 +187,36 @@ const CFG = {
   FM: 'https://api.finmindtrade.com/api/v4/data',
   VER_URL: 'https://eason-237588.github.io/tw-strategy-624a0d79/version.json',   // 線上版本檔（build_web.py 產生）
   DEFAULT_LIST: ['TAIEX', '00631L', 'F000014SAY', 'F0HKG05X1T', '2330', '2454', '2368',
-                 '0050', '006208', '0056', '00878', '00919', '00900'],
+                 '0050', '006208', '0056', '00878', '00919', '00900',
+                 '00406A', '00730', '00917', '00918', '00923', '00929', '00939', '2317', '2356'],
   // 115/10/19 加入的自選：已經用過的裝置開新版時一次性補進（不動使用者自己加減的部分）
   // 115/10/23 加入富邦上選 A；同日加入六檔 ETF（市值型 0050、006208；高股息 0056、00878、00919、00900）
   WATCH_ADD: { 'add-1019': ['00631L', 'TAIEX', '2330', '2454', 'F000014SAY'], 'add-fubon-test': ['F0HKG05X1T'],
-               'add-etf-1023': ['0050', '006208', '0056', '00878', '00919', '00900'] },
+               'add-etf-1023': ['0050', '006208', '0056', '00878', '00919', '00900'],
+               // 115/11/06 使用者要求把證券庫存（截圖 13 檔）都加入；0056、00878、00919、2330 已在清單
+               'add-holdings-1106': ['00406A', '00730', '00917', '00918', '00923', '00929', '00939', '2317', '2356'] },
   // 115/10/19 使用者要求自選股「只留財報體質強的」（台積電、金像電、聯發科；正 2、加權、高股息基金沒有財報，保留）。
   // 移除：體質弱 先進光、友達、光鼎、英業達、凌陽；體質中 今國光、富喬、鴻海、華碩、普安、玉山金、中美晶、新普、信音、精誠、佳邦、宇瞻。
   // 已用過的裝置一次性移除，之後自己加回不再刪
-  WATCH_DEL: { 'keep-strong-1019': ['3362', '2409', '6226', '2356', '2401', '6209', '1815', '2317', '2357', '2495',
+  // 115/11/06 英業達 2356、鴻海 2317 是庫存、使用者要加回，從這裡拿掉（否則新裝置加完又被刪；用過這把鍵的裝置不受影響）
+  WATCH_DEL: { 'keep-strong-1019': ['3362', '2409', '6226', '2401', '6209', '1815', '2357', '2495',
                                     '2884', '5483', '6121', '6126', '6214', '6284', '8271'] },
   // 115/10/26 細部分析（報告 1151026_自選13檔細部分析-02）：這兩檔主策略保護不了，總表與個股頁標「觀察用」，提醒看到訊號不要照做
   OBSERVE: { '2454': '近 3 年回落 36% 比抱著 32% 還大，2025 年虧 12%', '2368': '近 3 年回落 41%、長期回落 69%，大跌年常保護不了' },
-  FUND_URL: 'https://tw-quote.eason-237588.workers.dev/?fund='   // 台股趨勢儀表板的轉接站，代抓 Yahoo 基金淨值
+  FUND_URL: 'https://tw-quote.eason-237588.workers.dev/?fund=',  // 台股趨勢儀表板的轉接站，代抓 Yahoo 基金淨值
+  // 115/11/06「期貨」分頁：一頁橫 2 直 3（使用者指定）。台指期讀 FinMind 日盤近月（成交量最大的月份）接成連續日線；
+  // 其餘四個經轉接站讀 Yahoo 連續近月期貨（換月跳空未還原）。照使用者原則多空都做（RF 15/4 反手），不是台股的只做多
+  FUT: [['TX', '台指期'], ['NQ=F', '那斯達克'], ['GC=F', '黃金'], ['6E=F', '歐元'], ['CL=F', '原油']],
+  FUT_URL: 'https://tw-quote.eason-237588.workers.dev/?y='
 };
 
 // 不是一般股票的商品：種類 E＝ETF（沒有財報）、I＝指數、F＝基金（只有每日淨值）
 const EXTRA = [['00631L', '元大台灣50正2', 'L'], ['TAIEX', '加權指數', 'I'], ['F000014SAY', '高股息龍頭 B', 'F', '元大台灣高股息優質龍頭基金 B 類型（月配息）'], ['F0HKG05X1T', '富邦上選 A', 'F', '富邦上選基金（A 類型）'],
   ['0050', '元大台灣50', 'E'], ['006208', '富邦台50', 'E'], ['0056', '元大高股息', 'E'],
-  ['00878', '國泰永續高股息', 'E'], ['00919', '群益台灣精選高息', 'E'], ['00900', '富邦特選高股息30', 'E']];
+  ['00878', '國泰永續高股息', 'E'], ['00919', '群益台灣精選高息', 'E'], ['00900', '富邦特選高股息30', 'E'],
+  ['00406A', '主動中信台灣收益', 'E'], ['00730', '富邦臺灣優質高息', 'E'], ['00917', '中信特選金融', 'E'],
+  ['00918', '大華優利高填息30', 'E'], ['00923', '群益台ESG低碳50', 'E'], ['00929', '復華台灣科技優息', 'E'],
+  ['00939', '統一台灣高息動能', 'E']];
 
 // 主推排第一個；只做多（轉空就空手）
 const STRATS = [
@@ -566,16 +591,17 @@ if (typeof module !== 'undefined') module.exports = { CFG, STRATS, calcRF, calcD
   /* ── K 棒圖：K 棒與背景依主策略上色（紅＝持有、綠＝空手），照台股趨勢儀表板不畫濾網線與進出點 ── */
   const RANGES = [['3月', 63], ['6月', 126], ['1年', 250], ['3年', 0]];
   let RNG = LS.get('tsa-rng', 126), LINE = false;
-  function drawChart(cv, B, pos) {
+  function drawChart(cv, B, pos, rng) {
     const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
     cv.width = w * dpr; cv.height = h * dpr; const g = cv.getContext('2d'); g.scale(dpr, dpr);
-    const s0 = idxOf(B, CFG.START), s = RNG ? Math.max(s0, B.length - RNG) : s0, X = B.slice(s), P = pos.slice(s), n = X.length;
+    const RN = rng === undefined ? RNG : rng;
+    const s0 = idxOf(B, CFG.START), s = RN ? Math.max(s0, B.length - RN) : s0, X = B.slice(s), P = pos.slice(s), n = X.length;
     let lo = Infinity, hi = -Infinity; X.forEach(b => { lo = Math.min(lo, b.l); hi = Math.max(hi, b.h); });
     const pad = (hi - lo) * 0.04; lo -= pad; hi += pad;
     const pl = 2, pr = 46, pt = 6, pb = 18, cw = (w - pl - pr) / n, x = i => pl + cw * (i + 0.5), y = v => pt + (h - pt - pb) * (1 - (v - lo) / (hi - lo || 1));
     for (let i = 0; i < n; i++) { g.fillStyle = P[i] > 0 ? 'rgba(198,40,40,.16)' : 'rgba(27,127,59,.14)'; g.fillRect(pl + cw * i, pt, cw + 0.6, h - pt - pb); }
     g.strokeStyle = '#2a3542'; g.lineWidth = 1; g.font = '10px Consolas, monospace'; g.fillStyle = '#8b98a5'; g.textAlign = 'left';
-    for (let k = 0; k <= 4; k++) { const v = lo + (hi - lo) * k / 4, yy = y(v); g.beginPath(); g.moveTo(pl, yy); g.lineTo(w - pr, yy); g.stroke(); g.fillText(v >= 100 ? v.toFixed(0) : v.toFixed(1), w - pr + 4, yy + 3); }
+    for (let k = 0; k <= 4; k++) { const v = lo + (hi - lo) * k / 4, yy = y(v); g.beginPath(); g.moveTo(pl, yy); g.lineTo(w - pr, yy); g.stroke(); g.fillText(v >= 100 ? v.toFixed(0) : (v >= 10 ? v.toFixed(1) : v.toFixed(3)), w - pr + 4, yy + 3); }
     const bw = Math.max(1, Math.min(9, cw * 0.7));
     if (LINE) {   // 基金只有淨值：畫線，每段依主策略上色
       g.lineWidth = 1.6;
@@ -618,6 +644,55 @@ if (typeof module !== 'undefined') module.exports = { CFG, STRATS, calcRF, calcD
     btn.disabled = false;
   }
   $('#allRun').onclick = runAll;
+
+  /* ── 畫面：期貨（2026-11-06 使用者要求「一頁 橫向×2 直向×3」）：台指期、那斯達克、黃金、歐元、原油＋說明格 ──
+     多空都做（RF 15/4 反手，照使用者「黃金、台指、那斯達克一律多空反手」）；成交量過濾關掉（連續合約換月時量會斷） */
+  const getTX = () => cached('tsa-fut-TX', async () => {
+    const rows = await fm('TaiwanFuturesDaily', 'TX', CFG.FETCH_FROM), best = {};
+    rows.forEach(r => {   // 只看日盤、單一月份合約；同一天取成交量最大的月份（就是近月，結算週會換到次月）
+      if (r.trading_session !== 'position' || !/^\d{6}$/.test(String(r.contract_date).trim()) || !(r.close > 0)) return;
+      if (!best[r.date] || r.volume > best[r.date].volume) best[r.date] = r;
+    });
+    return Object.keys(best).sort().map(d => { const r = best[d]; return { d, o: r.open, h: r.max, l: r.min, c: r.close, v: r.volume }; });
+  });
+  const getY = sym => cached('tsa-fut-' + sym, async () => {
+    let r; try { r = await fetch(CFG.FUT_URL + encodeURIComponent(sym)); } catch (e) { throw new Error('轉接站連不上，請稍後再試'); }
+    const j = await r.json(); if (!r.ok) throw new Error(j.error || ('轉接站回應 ' + r.status));
+    return j.d.map((d, i) => ({ d, o: j.o[i], h: j.h[i], l: j.l[i], c: j.c[i], v: j.v[i] || 0 })).filter(b => b.c > 0 && b.o > 0 && b.h > 0 && b.l > 0);
+  });
+  async function analyzeFut(id) {
+    const B = id === 'TX' ? await getTX() : await getY(id);
+    if (B.length < 200) throw new Error('日線資料不足（' + B.length + ' 根）');
+    const { pos, warm } = calcRF(B, 15, 4, 'both', false);
+    const st = Math.max(idxOf(B, CFG.START), warm), md = idxOf(B, CFG.MID);
+    return { B, pos, all: perf(B, pos, st), h1: perf(B, pos, st, md + 1), h2: perf(B, pos, md), s: sinceOf(B, pos) };
+  }
+  const FUTD = {};
+  const pxFmt = v => v >= 1000 ? num(v) : (v >= 10 ? num(v, 2) : num(v, 4));
+  async function runFut() {
+    const out = $('#futOut'); out.innerHTML = '';
+    for (const [id, nm] of CFG.FUT) {
+      const el = document.createElement('div'); el.className = 'tile ft'; el.innerHTML = `<div class="t1"><span class="nm">${esc(nm)}</span></div><div class="ln mut">讀取中…</div>`; out.appendChild(el);
+      try {
+        const F = await analyzeFut(id), s = F.s, a = F.all, last = F.B[F.B.length - 1];
+        FUTD[id] = F; el.classList.add(s.now > 0 ? 'on' : 'off');
+        el.innerHTML = `<div class="t1">${badge(s.now)}<span class="nm">${esc(nm)}</span><span class="fpx">${pxFmt(last.c)}</span></div>
+          <div class="ln mut">${md(s.since)} 起 <span class="${cls(s.chg * s.now)}">${pct(s.chg * s.now, 1)}</span>・資料到 ${md(last.d)}</div>
+          <div class="ln">策略 <span class="${cls(a.ret)}">${pct(a.ret)}</span>／抱 <span class="${cls(a.bh)}">${pct(a.bh)}</span></div>
+          <div class="ln mut">回落 ${pctU(a.mdd)}／${pctU(a.bhMdd)}${F.h1.ret > 0 && F.h2.ret > 0 ? ' <b class="two">兩段賺</b>' : ''}</div>
+          <canvas></canvas>`;
+        drawChart(el.querySelector('canvas'), F.B, F.pos, 126);
+      } catch (e) { el.innerHTML = `<div class="t1"><span class="nm">${esc(nm)}</span></div><div class="ln err">${esc(e.message)}</div>`; }
+    }
+    const el = document.createElement('div'); el.className = 'tile ft fnote';
+    el.innerHTML = `<div class="t1"><span class="nm">說明</span></div>
+      <div class="ln">RF 15/4 多空反手</div><div class="ln mut">紅＝做多、綠＝做空</div><div class="ln mut">圖：近 6 個月日線</div>
+      <div class="ln mut">績效 ${CFG.START.slice(0, 7).replace('-', '/')} 起</div><div class="ln mut">每筆扣 0.38%（偏保守）</div>
+      <div class="ln mut">台指：FinMind 日盤近月</div><div class="ln mut">其他：Yahoo 連續近月</div><div class="ln mut">換月跳空未還原</div>`;
+    out.appendChild(el);
+  }
+  addEventListener('resize', () => { if ($('#pg-fut').hidden) return;
+    document.querySelectorAll('#futOut .ft canvas').forEach((cv, i) => { const F = FUTD[CFG.FUT[i] && CFG.FUT[i][0]]; if (F) drawChart(cv, F.B, F.pos, 126); }); });
 
   /* ── 有機會做多：讀每日掃描結果 chance.json（每日掃描.py 收盤後產生），有新結果時分頁按鈕閃爍 ── */
   let CH = null;
@@ -665,7 +740,8 @@ if (typeof module !== 'undefined') module.exports = { CFG, STRATS, calcRF, calcD
   $('#sug').onclick = e => { const d = e.target.closest('[data-id]'); if (d) show(d.dataset.id); };
   function switchPg(pg) {
     document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.pg === pg));
-    $('#pg-one').hidden = pg !== 'one'; $('#pg-all').hidden = pg !== 'all'; $('#pg-chance').hidden = pg !== 'chance';
+    $('#pg-one').hidden = pg !== 'one'; $('#pg-all').hidden = pg !== 'all'; $('#pg-chance').hidden = pg !== 'chance'; $('#pg-fut').hidden = pg !== 'fut';
+    if (pg === 'fut' && !$('#futOut').children.length) runFut();
     if (pg === 'chance') { $('#tabChance').classList.remove('blink'); drawChance(); if (CH && CH.date) LS.set('tsa-ch-seen', CH.date); }
     if (pg === 'all' && !$('#allOut').children.length) runAll();
   }
